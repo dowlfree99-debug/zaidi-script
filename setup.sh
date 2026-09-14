@@ -11,7 +11,7 @@ WHITE='\033[1;37m'
 NC='\033[0m'
 
 # --- LICENSE PROTECTION SYSTEM ---
-VALID_KEY="ZAIDI-VIP-2026" # يمكنك تغيير هذا المفتاح مستقبلاً
+VALID_KEY="ZAIDI-VIP-2026"
 
 clear
 echo -e "${CYAN}====================================================${NC}"
@@ -46,7 +46,7 @@ get_online_users() {
 show_header() {
     clear
     IP=$(get_ipv4)
-    DOMAIN=$(cat /etc/v2ray/domain 2>/dev/null || echo "Not Configured")
+    DOMAIN=$(cat /etc/v2ray/domain 2>/dev/null || echo "$IP")
     ONLINE=$(get_online_users)
     
     echo -e "${CYAN}====================================================${NC}"
@@ -57,7 +57,6 @@ show_header() {
     echo -e " ${YELLOW}Online     :${NC} ${GREEN}$ONLINE Users Connected${NC}"
     echo -e "${CYAN}----------------------------------------------------${NC}"
     
-    # Check Active Services Status
     if systemctl is-active --quiet ssh; then SSH_STATUS="${GREEN}ON${NC}"; else SSH_STATUS="${RED}OFF${NC}"; fi
     if systemctl is-active --quiet stunnel4; then TLS_STATUS="${GREEN}ON${NC}"; else TLS_STATUS="${RED}OFF${NC}"; fi
     if systemctl is-active --quiet xray; then V2RAY_STATUS="${GREEN}ON${NC}"; else V2RAY_STATUS="${RED}OFF${NC}"; fi
@@ -104,13 +103,60 @@ EOF
     systemctl restart ssh dropbear 2>/dev/null
 }
 
-# Install Core Dependencies
+# Install Core Dependencies & Official Xray
 install_services() {
     echo -e "${YELLOW}[+] Updating system packages and installing services...${NC}"
     apt update && apt upgrade -y
-    apt install -y curl wget unzip stunnel4 xray dropbear net-tools uuid-runtime jq
+    apt install -y curl wget unzip dropbear stunnel4 net-tools uuid-runtime jq
 
     setup_banner
+
+    # Install Official Xray
+    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+
+    # Create Initial Xray Configuration
+    mkdir -p /usr/local/etc/xray
+    cat << 'EOF' > /usr/local/etc/xray/config.json
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "port": 80,
+      "protocol": "vmess",
+      "settings": {
+        "clients": []
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/v2ray"
+        }
+      }
+    },
+    {
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/v2ray"
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom"
+    }
+  ]
+}
+EOF
 
     cat <<EOF > /etc/stunnel/stunnel.conf
 cert = /etc/stunnel/stunnel.pem
@@ -126,7 +172,14 @@ EOF
 
     openssl req -new -x509 -days 365 -nodes -out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem -subj "/C=MA/ST=ZAIDI/L=ZAIDI/O=ZAIDI/OU=ZAIDI/CN=zaidi"
     sed -i 's/ENABLED=0/ENABLED=1/g' /etc/default/stunnel4
+    
+    ufw allow 80/tcp 2>/dev/null
+    ufw allow 443/tcp 2>/dev/null
+    ufw allow 8443/tcp 2>/dev/null
+
     systemctl restart stunnel4
+    systemctl enable xray
+    systemctl restart xray
 
     echo -e "${GREEN}[✔] Installation completed successfully!${NC}"
     read -p "Press Enter to continue..."
@@ -196,6 +249,14 @@ create_v2ray_user() {
 
     exp_date=$(date -d "+$days days" +"%Y-%m-%d")
 
+    # Add UUID to Xray config if file exists
+    XRAY_CONFIG="/usr/local/etc/xray/config.json"
+    if [ -f "$XRAY_CONFIG" ]; then
+        tmp=$(mktemp)
+        jq --arg uuid "$UUID" '.inbounds[0].settings.clients += [{"id": $uuid, "alterId": 0}] | .inbounds[1].settings.clients += [{"id": $uuid}]' "$XRAY_CONFIG" > "$tmp" && mv "$tmp" "$XRAY_CONFIG"
+        systemctl restart xray 2>/dev/null
+    fi
+
     VMESS_80_JSON=$(cat <<EOF
 {
   "v": "2",
@@ -236,7 +297,6 @@ EOF
 
     VLESS_80_LINK="vless://${UUID}@${DOMAIN}:80?path=%2Fv2ray&security=none&encryption=none&type=ws#ZAIDI-VLESS80-${client_name}"
     VLESS_443_LINK="vless://${UUID}@${DOMAIN}:443?path=%2Fv2ray&security=tls&encryption=none&type=ws&sni=${DOMAIN}#ZAIDI-VLESS443-${client_name}"
-    TROJAN_LINK="trojan://${UUID}@${DOMAIN}:443?path=%2Ftrojan-ws&security=tls&type=ws&sni=${DOMAIN}#ZAIDI-TROJAN-${client_name}"
 
     echo -e "${CYAN}====================================================${NC}"
     echo -e "${GREEN}      V2RAY / TROJAN CONFIG CREATED SUCCESSFULLY   ${NC}"
@@ -257,9 +317,6 @@ EOF
     echo -e "${CYAN}----------------------------------------------------${NC}"
     echo -e "${PURPLE}VLESS (Port 443 WS TLS):${NC}"
     echo -e "${WHITE}${VLESS_443_LINK}${NC}"
-    echo -e "${CYAN}----------------------------------------------------${NC}"
-    echo -e "${PURPLE}Trojan WS (Port 443 TLS):${NC}"
-    echo -e "${WHITE}${TROJAN_LINK}${NC}"
     echo -e "${CYAN}====================================================${NC}"
     read -p "Press Enter to return to main menu..."
 }
@@ -298,4 +355,3 @@ main_menu() {
 }
 
 main_menu
-
