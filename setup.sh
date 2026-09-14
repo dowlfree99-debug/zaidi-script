@@ -249,7 +249,7 @@ create_v2ray_user() {
 
     exp_date=$(date -d "+$days days" +"%Y-%m-%d")
 
-    # Add UUID to Xray config if file exists
+    # Add UUID to Xray config
     XRAY_CONFIG="/usr/local/etc/xray/config.json"
     if [ -f "$XRAY_CONFIG" ]; then
         tmp=$(mktemp)
@@ -276,47 +276,21 @@ EOF
 )
     VMESS_80_LINK="vmess://$(echo -n "$VMESS_80_JSON" | base64 -w 0)"
 
-    VMESS_443_JSON=$(cat <<EOF
-{
-  "v": "2",
-  "ps": "ZAIDI-WS443-${client_name}",
-  "add": "${DOMAIN}",
-  "port": "443",
-  "id": "${UUID}",
-  "aid": "0",
-  "scy": "auto",
-  "net": "ws",
-  "type": "none",
-  "host": "${DOMAIN}",
-  "path": "/v2ray",
-  "tls": "tls"
-}
-EOF
-)
-    VMESS_443_LINK="vmess://$(echo -n "$VMESS_443_JSON" | base64 -w 0)"
-
     VLESS_80_LINK="vless://${UUID}@${DOMAIN}:80?path=%2Fv2ray&security=none&encryption=none&type=ws#ZAIDI-VLESS80-${client_name}"
-    VLESS_443_LINK="vless://${UUID}@${DOMAIN}:443?path=%2Fv2ray&security=tls&encryption=none&type=ws&sni=${DOMAIN}#ZAIDI-VLESS443-${client_name}"
 
     echo -e "${CYAN}====================================================${NC}"
-    echo -e "${GREEN}      V2RAY / TROJAN CONFIG CREATED SUCCESSFULLY   ${NC}"
+    echo -e "${GREEN}      V2RAY CONFIG CREATED SUCCESSFULLY             ${NC}"
     echo -e "${CYAN}====================================================${NC}"
     echo -e " ${YELLOW}User Remark   :${NC} ${WHITE}${client_name}${NC}"
     echo -e " ${YELLOW}User ID (UUID):${NC} ${WHITE}${UUID}${NC}"
     echo -e " ${YELLOW}Active Days   :${NC} ${WHITE}${days} Days${NC}"
     echo -e " ${YELLOW}Expired Date  :${NC} ${RED}${exp_date}${NC}"
     echo -e "${CYAN}----------------------------------------------------${NC}"
-    echo -e "${PURPLE}VMess (Port 80 WS):${NC}"
+    echo -e "${PURPLE}VMess (Port 80 WS - Non TLS):${NC}"
     echo -e "${WHITE}${VMESS_80_LINK}${NC}"
     echo -e "${CYAN}----------------------------------------------------${NC}"
-    echo -e "${PURPLE}VMess (Port 443 WS TLS):${NC}"
-    echo -e "${WHITE}${VMESS_443_LINK}${NC}"
-    echo -e "${CYAN}----------------------------------------------------${NC}"
-    echo -e "${PURPLE}VLESS (Port 80 WS):${NC}"
+    echo -e "${PURPLE}VLESS (Port 80 WS - Non TLS):${NC}"
     echo -e "${WHITE}${VLESS_80_LINK}${NC}"
-    echo -e "${CYAN}----------------------------------------------------${NC}"
-    echo -e "${PURPLE}VLESS (Port 443 WS TLS):${NC}"
-    echo -e "${WHITE}${VLESS_443_LINK}${NC}"
     echo -e "${CYAN}====================================================${NC}"
     read -p "Press Enter to return to main menu..."
 }
@@ -337,7 +311,7 @@ main_menu() {
     echo -e " ${CYAN}[01]${NC} ${WHITE}Install & Setup All Services${NC}"
     echo -e " ${CYAN}[02]${NC} ${WHITE}Add / Change Domain Name${NC}"
     echo -e " ${CYAN}[03]${NC} ${WHITE}Create SSH + TLS User (Limit & Expiry)${NC}"
-    echo -e " ${CYAN}[04]${NC} ${WHITE}Create V2Ray / Trojan Config (Expiry)${NC}"
+    echo -e " ${CYAN}[04]${NC} ${WHITE}Create V2Ray Config (Expiry)${NC}"
     echo -e " ${CYAN}[05]${NC} ${WHITE}Renew & Restart All Services (SSH/V2Ray)${NC}"
     echo -e " ${RED}[00]${NC} ${WHITE}Exit Panel${NC}"
     echo -e "${CYAN}====================================================${NC}"
@@ -355,3 +329,4 @@ main_menu() {
 }
 
 main_menu
+
